@@ -1,3 +1,18 @@
+// 关于 element 的定义, 只考虑了 type 和 props
+/**
+* @param {*} type
+* @param {*} props
+* @param {*} key
+* @param {string|object} ref
+* @param {*} owner
+* @param {*} self A *temporary* helper to detect places where `this` is
+* different from the `owner` when React.createElement is called, so that we
+* can warn. We want to get rid of owner and replace string `ref`s with arrow
+* functions, and as long as `this` and owner are the same, there will be no
+* change in behavior.
+* @param {*} source An annotation object (added by a transpiler or otherwise)
+* indicating filename, line number, and/or other information.
+*/
 function createElement(type, props, ...children) {
   return {
     type,
@@ -74,6 +89,7 @@ function updateDom(dom, prevProps, nextProps) {
 function commitRoot() {
   deletions.forEach(commitWork);
   commitWork(wipRoot.child);
+  // commit 完成之后， 保存 fiber 树
   currentRoot = wipRoot;
   wipRoot = null;
 }
@@ -127,12 +143,14 @@ let wipRoot = null;
 let deletions = null;
 
 function workLoop(deadline) {
+  // 是否应该暂停
   let shouldYield = false;
   while (nextUnitOfWork && !shouldYield) {
     nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
     shouldYield = deadline.timeRemaining() < 1;
   }
 
+  // 所有任务都完成后，再进行 dom 的实际添加
   if (!nextUnitOfWork && wipRoot) {
     commitRoot();
   }
@@ -140,8 +158,14 @@ function workLoop(deadline) {
   requestIdleCallback(workLoop);
 }
 
+// 浏览器的 RIC 方法， 本例使用RIC实现 react的 异步可中断更新
 requestIdleCallback(workLoop);
 
+// 这是一个大的 Fiber 树结构， 每个 Fiber 节点对应一个 React Element
+// 在每个单元需要做的事情
+// 1. 元素添加到dom中
+// 2. 为元素的子元素创建 fiber 结构
+// 3. 找到下一个 unit 
 function performUnitOfWork(fiber) {
   const isFunctionComponent = fiber.type instanceof Function;
   if (isFunctionComponent) {
@@ -210,6 +234,7 @@ function updateHostComponent(fiber) {
   reconcileChildren(fiber, fiber.props.children);
 }
 
+// fiber 树进行比较，
 function reconcileChildren(wipFiber, elements) {
   let index = 0;
   let oldFiber = wipFiber.alternate && wipFiber.alternate.child;
@@ -269,12 +294,15 @@ const ToyReact = {
 
 function Counter() {
   const [state, setState] = ToyReact.useState(1);
-  return (
-    <h1 onClick={() => setState(c => c + 1)} style="user-select: none">
-      Count: {state}
-    </h1>
-  );
+  return ToyReact.createElement("h1",{
+    onClick: function onClick() {
+      return setState(function (c) {
+        return c + 1;
+      });
+    },
+    style: "user-select: none"
+  },"Count: ", state);
 }
-const element = <Counter />;
+const element = ToyReact.createElement(Counter,null,null);
 const container = document.getElementById("root");
 ToyReact.render(element, container);
